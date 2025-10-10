@@ -55,7 +55,8 @@ public class ClockServer extends UnicastRemoteObject implements ClockService {
             for (String nombreCliente : clientes) {
                 try {
                     long inicio = System.currentTimeMillis();
-                    ClockService cliente = (ClockService) Naming.lookup("//" + nombreCliente + "/ClockClient");
+                    // Buscar el cliente por su nombre en el RMI registry (host: localhost, puerto: 1099)
+                    ClockService cliente = (ClockService) Naming.lookup("rmi://" + InetAddress.getLocalHost().getHostAddress() + ":1099/" + nombreCliente);
                     long horaCliente = cliente.getTimeMillis();
                     long fin = System.currentTimeMillis();
 
@@ -93,7 +94,8 @@ public class ClockServer extends UnicastRemoteObject implements ClockService {
                 System.out.println(k + "\tDesfase: " + desfases.get(k) + "\tAjuste: " + df.format(ajuste));
 
                 if (!k.equals(id)) {
-                    ClockService cliente = (ClockService) Naming.lookup("//" + k + "/ClockClient");
+                    // Buscar el cliente por su nombre en el RMI registry del servidor
+                    ClockService cliente = (ClockService) Naming.lookup("rmi://" + InetAddress.getLocalHost().getHostAddress() + ":1099/" + k);
                     cliente.applyAdjustment((long) ajuste);
                 } else {
                     applyAdjustment((long) ajuste);
@@ -119,10 +121,8 @@ public class ClockServer extends UnicastRemoteObject implements ClockService {
             String hostAddress = InetAddress.getLocalHost().getHostAddress();
             int port = 1099;
 
-            // Crear registro RMI en el puerto
+            // Crear registro RMI en el puerto y registrar el servidor
             LocateRegistry.createRegistry(port);
-
-            // Registrar el servidor en RMI con su IP real
             String url = "rmi://" + hostAddress + ":" + port + "/ClockServer";
             Naming.rebind(url, server);
             System.out.println("Servidor registrado en RMIRegistry como 'ClockServer'");
@@ -133,7 +133,43 @@ public class ClockServer extends UnicastRemoteObject implements ClockService {
                 System.exit(1);
             }
 
-            Thread.sleep(1000); // esperar un momento para que los clientes se registren
+            // Esperar hasta que los clientes se registren en el RMI registry (con timeout)
+            try {
+                java.rmi.registry.Registry registry = LocateRegistry.getRegistry(hostAddress, port);
+                final int timeoutMs = 30_000; // 30 segundos timeout
+                final int intervalMs = 500; // chequear cada 500ms
+                int waited = 0;
+
+                boolean allBound = false;
+                while (waited < timeoutMs) {
+                    try {
+                        String[] bound = registry.list();
+                        allBound = true;
+                        for (String cliente : args) {
+                            boolean found = false;
+                            for (String b : bound) {
+                                if (b.equals(cliente)) { found = true; break; }
+                            }
+                            if (!found) { allBound = false; break; }
+                        }
+                        if (allBound) break;
+                    } catch (RemoteException re) {
+                        // puede fallar temporalmente, se reintentará
+                    }
+                    try { Thread.sleep(intervalMs); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+                    waited += intervalMs;
+                }
+
+                if (!allBound) {
+                    System.err.println("Advertencia: no todos los clientes se registraron en el tiempo de espera. Procediendo con los que sí están.");
+                } else {
+                    System.out.println("Todos los clientes reportados están registrados. Iniciando sincronización.");
+                }
+            } catch (Exception e) {
+                // Si hay algún error consultando el registry, seguimos adelante y dejamos que sincronizar maneje NotBoundException.
+                System.err.println("Aviso: no se pudo comprobar el registro de clientes: " + e.getMessage());
+            }
+
             server.sincronizar(args);
 
         } catch (Exception e) {

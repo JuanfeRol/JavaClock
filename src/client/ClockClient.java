@@ -43,7 +43,7 @@ public class ClockClient extends UnicastRemoteObject implements ClockService {
         return id;
     }
 
-    public static void main(String[] args) {
+        public static void main(String[] args) {
         try {
             if (args.length < 3) {
                 System.err.println("Uso: java client.ClockClient <ID> <OFFSET_SEC> <SERVER_IP> [PORT]");
@@ -58,18 +58,11 @@ public class ClockClient extends UnicastRemoteObject implements ClockService {
             long offsetMs = offsetSec * 1000L;
             ClockClient client = new ClockClient(id, offsetMs);
 
-            // Detectar IP local del cliente
-            String clientIP = InetAddress.getLocalHost().getHostAddress();
-
-            // Registrar el cliente en su propio RMIRegistry local
-            Naming.rebind("//" + clientIP + "/" + id, client);
-            System.out.println("Cliente registrado en RMIRegistry con nombre: " + id +
-                    " | IP: " + clientIP + " | Offset inicial(ms): " + offsetMs);
-
-            // Conectarse al servidor remoto para aparecer en la lista de clientes
-            String serverUrl = "rmi://" + serverIP + ":" + port + "/ClockServer";
-            ClockService server = (ClockService) Naming.lookup(serverUrl);
-            System.out.println("Conectado al servidor: " + serverUrl);
+            // Registrar el cliente directamente en el RMIRegistry del servidor
+            String serverUrl = "rmi://" + serverIP + ":" + port + "/" + id;
+            Naming.rebind(serverUrl, client);
+            System.out.println("Cliente registrado en RMIRegistry remoto del servidor: " + serverUrl +
+                    " | Offset inicial(ms): " + offsetMs);
 
             // Mantener el cliente vivo para recibir invocaciones remotas
             System.out.println("Esperando invocaciones remotas... (presiona Ctrl+C para salir)");
@@ -81,4 +74,5 @@ public class ClockClient extends UnicastRemoteObject implements ClockService {
             e.printStackTrace();
         }
     }
+
 }
