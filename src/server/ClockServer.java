@@ -65,7 +65,7 @@ public class ClockServer extends UnicastRemoteObject implements ClockService {
     public void sincronizar() {
         try {
             if (clientesRegistrados.isEmpty()) {
-                System.out.println("⚠️  No hay clientes registrados para sincronizar.");
+                System.out.println("  No hay clientes registrados para sincronizar.");
                 return;
             }
 
@@ -99,11 +99,11 @@ public class ClockServer extends UnicastRemoteObject implements ClockService {
                     long desfase = horaAjustada - tiempoServidor;
                     desfases.put(clientId, desfase);
 
-                    System.out.println("📡 " + clientId + " - Hora: " + TimeUtils.fmt(horaCliente) + 
+                    System.out.println(" " + clientId + " - Hora: " + TimeUtils.fmt(horaCliente) + 
                                      ", RTT: " + rtt + "ms, Desfase: " + desfase + "ms");
 
                 } catch (Exception e) {
-                    System.err.println("❌ Error al contactar con " + clientId + ": " + e.getMessage());
+                    System.err.println(" Error al contactar con " + clientId + ": " + e.getMessage());
                     clientesRegistrados.remove(clientId);
                 }
             }
@@ -165,9 +165,9 @@ public class ClockServer extends UnicastRemoteObject implements ClockService {
             LocateRegistry.createRegistry(port);
             String url = "rmi://" + hostAddress + ":" + port + "/ClockServer";
             Naming.rebind(url, server);
-            System.out.println("✅ Servidor registrado en RMIRegistry como 'ClockServer'");
-            System.out.println("📍 URL de conexión para clientes: " + url);
-            System.out.println("👥 Esperando registro de clientes...");
+            System.out.println(" Servidor registrado en RMIRegistry como 'ClockServer'");
+            System.out.println(" URL de conexión para clientes: " + url);
+            System.out.println(" Esperando registro de clientes...");
 
             // Menu interactivo simple para administrar sincronizaciones y clientes
             java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(System.in));
@@ -187,8 +187,22 @@ public class ClockServer extends UnicastRemoteObject implements ClockService {
                         server.sincronizar();
                     } else if (cmd.equalsIgnoreCase("list") || cmd.equalsIgnoreCase("ls")) {
                         System.out.println("Clientes registrados: " + server.clientesRegistrados.size());
+                        // Mostrar hora del servidor
+                        long horaServidor = System.currentTimeMillis() + server.offsetMillis;
+                        System.out.println("Servidor -> " + TimeUtils.fmt(horaServidor) + " (ms=" + horaServidor + ")");
+
                         for (String k : server.clientesRegistrados.keySet()) {
-                            System.out.println(" - " + k);
+                            ClockService cliente = server.clientesRegistrados.get(k);
+                            try {
+                                long inicio = System.currentTimeMillis();
+                                long horaCliente = cliente.getTimeMillis();
+                                long fin = System.currentTimeMillis();
+                                long rtt = fin - inicio;
+                                long horaAjustada = horaCliente + (rtt / 2);
+                                System.out.println(" - " + k + " -> " + TimeUtils.fmt(horaAjustada) + " (ms=" + horaAjustada + ") RTT=" + rtt + "ms");
+                            } catch (Exception e) {
+                                System.out.println(" - " + k + " -> no responde: " + e.getMessage());
+                            }
                         }
                     } else if (cmd.startsWith("remove ") || cmd.startsWith("rm ")) {
                         String[] parts = cmd.split("\\s+", 2);
@@ -226,8 +240,5 @@ public class ClockServer extends UnicastRemoteObject implements ClockService {
         System.out.println("  help|h        - Mostrar esta ayuda");
         System.out.println("  sync|s        - Iniciar sincronizacion ahora");
         System.out.println("  list|ls       - Listar clientes registrados");
-        System.out.println("  remove|rm <id>- Remover cliente por id");
-        System.out.println("  clear         - Limpiar lista de clientes");
-        System.out.println("  exit|quit|q   - Salir del servidor");
     }
 }
