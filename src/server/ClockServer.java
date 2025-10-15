@@ -216,6 +216,53 @@ public class ClockServer extends UnicastRemoteObject implements ClockService {
                     } else if (cmd.equalsIgnoreCase("clear")) {
                         server.clientesRegistrados.clear();
                         System.out.println("Lista de clientes limpiada.");
+                    } else if (cmd.equalsIgnoreCase("checksync") || cmd.equalsIgnoreCase("c")) {
+                        System.out.println("Iniciando CheckSync: imprimirá cada segundo. Presiona 'q' y Enter para detener.");
+                        // bandera para detener
+                        final java.util.concurrent.atomic.AtomicBoolean stopFlag = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+                        // Bucle que imprime cada segundo y manda checkSync a clientes
+                        while (!stopFlag.get()) {
+                            long horaServidorCS = System.currentTimeMillis() + server.offsetMillis;
+                            System.out.println("\n---- CheckSync Start: " + TimeUtils.fmt(horaServidorCS) + " ----");
+
+                            System.out.println("Servidor -> " + TimeUtils.fmt(horaServidorCS) + " (ms=" + horaServidorCS + ")");
+                            for (String k : server.clientesRegistrados.keySet()) {
+                                ClockService cliente = server.clientesRegistrados.get(k);
+                                try {
+                                    long inicio = System.currentTimeMillis();
+                                    long horaCliente = cliente.getTimeMillis();
+                                    long fin = System.currentTimeMillis();
+                                    long rtt = fin - inicio;
+                                    long horaAjustada = horaCliente + (rtt / 2);
+                                    System.out.println(" - " + k + " -> " + TimeUtils.fmt(horaAjustada) + " (ms=" + horaAjustada + ") RTT=" + rtt + "ms");
+                                    // Notificar al cliente para que imprima su propio check
+                                    // No se notifica al cliente: cada cliente muestra su propio reloj local dinámico.
+                                } catch (Exception e) {
+                                    System.out.println(" - " + k + " -> no responde: " + e.getMessage());
+                                }
+                            }
+
+                            System.out.println("---- CheckSync End ----\n");
+
+                            // Esperar 1 segundo dividendo en pasos y comprobar si hay entrada 'q' usando el reader principal
+                            for (int i = 0; i < 10 && !stopFlag.get(); i++) {
+                                try { Thread.sleep(100); } catch (InterruptedException ie) { }
+                                try {
+                                    if (reader.ready()) {
+                                        String ln = reader.readLine();
+                                        if (ln != null && ln.trim().equalsIgnoreCase("q")) {
+                                            stopFlag.set(true);
+                                            break;
+                                        }
+                                        // cualquier otra entrada se ignora durante CheckSync
+                                    }
+                                } catch (java.io.IOException ioe) {
+                                    System.err.println("Error leyendo input durante CheckSync: " + ioe.getMessage());
+                                }
+                            }
+                        }
+                        System.out.println("CheckSync detenido por operador.");
                     } else if (cmd.equalsIgnoreCase("exit") || cmd.equalsIgnoreCase("quit") || cmd.equalsIgnoreCase("q")) {
                         System.out.println("Saliendo...");
                         break;
@@ -240,5 +287,7 @@ public class ClockServer extends UnicastRemoteObject implements ClockService {
         System.out.println("  help|h        - Mostrar esta ayuda");
         System.out.println("  sync|s        - Iniciar sincronizacion ahora");
         System.out.println("  list|ls       - Listar clientes registrados");
+        System.out.println("  Check|c       - Mostrar horas de clientes cada segundo (presiona 'q' para parar)");
+
     }
 }

@@ -28,4 +28,10 @@ public interface ClockService extends Remote {
     default void iniciarSincronizacion() throws RemoteException {
         throw new UnsupportedOperationException("Método solo disponible en el servidor");
     }
+
+    // ⭐ NUEVO: Método que el SERVIDOR usa para pedir a los clientes que impriman
+    // un check-sync (impresión de su hora local). Implementado por los clientes.
+    default void checkSync(long serverTime) throws RemoteException {
+        throw new UnsupportedOperationException("Método solo disponible en clientes");
+    }
 }

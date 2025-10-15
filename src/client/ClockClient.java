@@ -42,6 +42,13 @@ public class ClockClient extends UnicastRemoteObject implements ClockService {
         return true;
     }
 
+    @Override
+    public void checkSync(long serverTime) throws RemoteException {
+        long local = System.currentTimeMillis() + offsetMillis;
+        System.out.println("[" + id + "] CheckSync - ServerTime=" + TimeUtils.fmt(serverTime) +
+                " | Local=" + TimeUtils.fmt(local) + " (ms=" + local + ")");
+    }
+
     // ⭐ Los métodos registrarCliente e iniciarSincronizacion NO se implementan aquí
     // (usarán la implementación por defecto que lanza UnsupportedOperationException)
 
@@ -68,10 +75,33 @@ public class ClockClient extends UnicastRemoteObject implements ClockService {
             
             System.out.println("✅ Cliente " + id + " registrado en servidor " + serverIP);
             System.out.println("📍 Offset inicial: " + offsetMs + "ms");
-            System.out.println("⏰ Hora local simulada: " + TimeUtils.fmt(System.currentTimeMillis() + offsetMs));
-            System.out.println("👂 Esperando ajustes del servidor... (presiona Ctrl+C para salir)");
+                System.out.println("⏰ Hora local simulada: " + TimeUtils.fmt(System.currentTimeMillis() + offsetMs));
 
-            Thread.sleep(Long.MAX_VALUE);
+                // Hilo que muestra el reloj local dinámicamente en la consola
+                Thread display = new Thread(() -> {
+                    try {
+                        String last = "";
+                        while (!Thread.currentThread().isInterrupted()) {
+                            long local = System.currentTimeMillis() + client.offsetMillis;
+                            String s = "[" + id + "] Reloj local: " + TimeUtils.fmt(local) + " (offsetMs=" + client.offsetMillis + ")";
+                            // Rellenar con espacios para limpiar lineas previas si queda contenido
+                            int pad = Math.max(0, Math.max(last.length() - s.length(), 0));
+                            System.out.print('\r' + s + "" + " ".repeat(pad));
+                            System.out.flush();
+                            last = s;
+                            Thread.sleep(500);
+                        }
+                    } catch (InterruptedException ie) {
+                        // terminar hilo
+                    }
+                });
+                display.setDaemon(true);
+                display.start();
+
+                System.out.println("👂 Mostrando reloj local dinámico. Presiona Ctrl+C para salir.");
+
+                // Mantener el cliente vivo (RMI recibirá llamadas en background)
+                Thread.currentThread().join();
 
         } catch (Exception e) {
             System.err.println("❌ Error conectando con el servidor: " + e.getMessage());
